@@ -1,8 +1,9 @@
-# GoTube
+# GoTube -  Scalable Stochastic Verification of Continuous-Depth Models
+
+GoTube constructs stochastic reachtubes (= the set of all reachable system states) of continuous-time systems. GoTube is made deliberately for the verification of countinuous-depth neural networks.
+![Figure 1 of the paper](fig1.png)
 
 This document describes the general usage of GoTube. For the setup to reproduce the exact numbers reported in the paper have a look at the files ```table1.sh```, ```table2.sh```, and ```table3.sh```. 
-
-GoTube solves stochastic optimization problems to create stochastic reachtubes.
 
 ## Setup
 
@@ -97,4 +98,10 @@ To create a 95% confidence reachtube for the CartPole-v1 with a CT-RNN and a max
 
 ```bash
 python main.py --time_horizon 1 --benchmark cartpoleCTRNN --batch_size 10000 --time_step 0.02 --gamma 0.05 --mu 1.5
+```
+
+## Citation
+
+```tex
+TODO Add bibtex here
 ```
