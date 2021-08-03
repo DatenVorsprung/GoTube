@@ -15,7 +15,7 @@ We recommend creating a virtual environment, for GoTube's dependencies to not in
 ```bash
 python3 -m venv venv      # Optional
 source venv/bin/activate  # Optional
-pip3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 ## Benchmarks
