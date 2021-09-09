@@ -124,8 +124,10 @@ if __name__ == "__main__":
             f.write(f"{args.benchmark},")
             f.write(f"{args.time_horizon:0.4g},")
             f.write(f"{args.radius:0.4g},")
+            f.write(f"{args.mu:0.4g},")
             f.write(f"{1.0-args.gamma:0.4f},")
             f.write(f"{time.time()-start_time:0.2f},")
+            f.write(f"{total_random_points.shape[0]:d},")
             f.write(f"{float(volume.mean()):0.5g}")
             f.write("\n")
     if rt.profile:
