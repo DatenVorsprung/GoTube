@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--score", action="store_true")
     parser.add_argument("--benchmark", default="vdp")
     # starting_time, time_step and time_horizon for creating reachtubes
-    parser.add_argument("--starting_time", default=0.01, type=float)
+    parser.add_argument("--starting_time", default=0.0, type=float)
     parser.add_argument("--time_step", default=0.01, type=float)
     parser.add_argument("--time_horizon", default=10, type=float)
     # batch-size for tensorization
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         radius=args.radius,
     )  # reachtube
 
-    timeRange = np.arange(args.starting_time, args.time_horizon + 1e-9, args.time_step)
+    timeRange = np.arange(args.starting_time + args.time_step, args.time_horizon + 1e-9, args.time_step)
     timeRange_with_start = np.append(np.array([0]), timeRange)
 
     volume = jnp.array([rt.compute_volume()])

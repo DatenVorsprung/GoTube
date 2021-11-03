@@ -10,7 +10,6 @@ import dynamics
 _rng = np.random.RandomState(12937)
 
 
-@partial(jit, static_argnums=(0, 1))
 def init_random_phi(dim, samples=1):
     global _rng
     phi = _rng.uniform(0, jnp.pi, samples * (dim - 2))
