@@ -9,6 +9,7 @@ import time
 from performance_log import log_stat
 from timer import Timer
 from scipy import stats
+import gc
 
 
 # using expected difference quotient of center lipschitz constant
@@ -78,7 +79,7 @@ def get_diff_quotient_vmap(x_jax, fx_jax, y_jax, fy_jax, axis):
     return vmap(get_diff_quotient, in_axes=(0, 0, None, None, None))(x_jax, fx_jax, y_jax, fy_jax, axis)
 
 
-def optimize(model, initial_points, previous_points=None, previous_gradients=None):
+def optimize(model, initial_points, points=None, gradients=None):
     start_time = time.time()
 
     prob = None
@@ -88,16 +89,19 @@ def optimize(model, initial_points, previous_points=None, previous_gradients=Non
     conf = (1 + jnp.sqrt(1-model.gamma)) / 2
     t_star = stats.t.ppf(conf, df)
 
-    if previous_points is None or previous_gradients is None:
+    if points is None or gradients is None:
         previous_samples = 0
         phis = pol.init_random_phi(model.model.dim, model.batch)
         points, gradients, neg_dists, initial_points = model.aug_integrator_neg_dist(phis)
         dists = -neg_dists
+        del neg_dists
+        del phis
+        gc.collect()
     else:
-        previous_samples = previous_points.shape[0]
+        previous_samples = points.shape[0]
         with Timer('integrate random points and gradients - one step'):
             points, gradients, dists = model.one_step_aug_integrator_dist(
-                previous_points, previous_gradients
+                points, gradients
             )
 
     first_iteration = True
@@ -110,12 +114,20 @@ def optimize(model, initial_points, previous_points=None, previous_gradients=Non
             with Timer('compute first integration step and dist'):
                 new_points, new_gradients, new_neg_dists, new_initial_points = model.aug_integrator_neg_dist(phis)
                 new_dists = -new_neg_dists
+                del new_neg_dists
+                del phis
+                gc.collect()
 
             with Timer('concatenate new points to tensors'):
                 points = jnp.concatenate((points, new_points), axis=0)
                 gradients = jnp.concatenate((gradients, new_gradients), axis=0)
                 dists = jnp.concatenate((dists, new_dists), axis=0)
                 initial_points = jnp.concatenate((initial_points, new_initial_points), axis=0)
+                del new_points
+                del new_gradients
+                del new_dists
+                del new_initial_points
+                gc.collect()
 
         with Timer('compute best dist'):
             dist_best = dists.max()
@@ -136,10 +148,9 @@ def optimize(model, initial_points, previous_points=None, previous_gradients=Non
                 dimension_axis
             )
 
-            v_mean = jnp.nanmean(diff_quotients, axis=dimension_axis)
-            v_std = jnp.nanstd(diff_quotients, axis=dimension_axis)
-
-            delta_lipschitz = v_mean + t_star * v_std / jnp.sqrt(sample_size)
+            delta_lipschitz = jnp.nanmean(diff_quotients, axis=dimension_axis) + t_star * jnp.nanstd(diff_quotients, axis=dimension_axis) / jnp.sqrt(sample_size)
+            del diff_quotients
+            gc.collect()
 
         with Timer('get safety region radii'):
             safety_region_radii = get_safety_region_radius(
@@ -148,6 +159,11 @@ def optimize(model, initial_points, previous_points=None, previous_gradients=Non
 
         with Timer('compute probability'):
             prob = get_probability(model, safety_region_radii)
+
+            del delta_lipschitz
+            del lipschitz
+            del safety_region_radii
+            gc.collect()
 
         if first_iteration:
             print("start probability is: ")
