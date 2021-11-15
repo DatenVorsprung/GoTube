@@ -1,2 +1,15 @@
+# PyCharm IDEA
+/.idea
+.project
+.pydevproject
+/__pycache__
+
+# Mac OS
+/.DS_Store
+
+# Virtual environment
+/venv
+/env
+
 # Output and Log files
 all_prob_scores.csv
