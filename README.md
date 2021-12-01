@@ -1,5 +1,9 @@
 # GoTube -  Scalable Stochastic Verification of Continuous-Depth Models
 
+This is the official code repository of the paper *GoTube: Scalable Stochastic Verification of Continuous-Depth Models*
+accepted to the Thirty-Sixth AAAI Conference on Artificial Intelligence (AAAI-22)
+([arXiv link](https://arxiv.org/abs/2107.08467)).
+
 GoTube constructs stochastic reachtubes (= the set of all reachable system states) of continuous-time systems. GoTube is made deliberately for the verification of countinuous-depth neural networks.
 ![Figure 1 of the paper](fig3.png)
 
