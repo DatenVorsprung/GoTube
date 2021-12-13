@@ -5,7 +5,7 @@ accepted to the Thirty-Sixth AAAI Conference on Artificial Intelligence (AAAI-22
 ([arXiv link](https://arxiv.org/abs/2107.08467)).
 
 GoTube constructs stochastic reachtubes (= the set of all reachable system states) of continuous-time systems. GoTube is made deliberately for the verification of countinuous-depth neural networks.
-![Figure 1 of the paper](GoTube.jpg)
+![Figure 1 of the paper](GoTube1.jpg)
 
 This document describes the general usage of GoTube. For the setup to reproduce the exact numbers reported in the paper have a look at the files ```table1.sh```, ```table2.sh```, and ```table3.sh```. 
 
