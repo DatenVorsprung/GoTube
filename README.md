@@ -107,5 +107,16 @@ python main.py --time_horizon 1 --benchmark cartpoleCTRNN --batch_size 10000 --t
 ## Citation
 
 ```tex
-TODO Add bibtex here
+@article{Gruenbacher2022GoTube,
+    author={Gruenbacher, Sophie A. and Lechner, Mathias and Hasani, Ramin and Rus, Daniela and Henzinger, Thomas A. and Smolka, Scott A. and Grosu, Radu},
+    title={GoTube: Scalable Statistical Verification of Continuous-Depth Models},
+    volume={36},
+    url={https://ojs.aaai.org/index.php/AAAI/article/view/20631},
+    DOI={10.1609/aaai.v36i6.20631},
+    number={6},
+    journal={Proceedings of the AAAI Conference on Artificial Intelligence},
+    year={2022},
+    month={Jun.},
+    pages={6755-6764},
+}
 ```
