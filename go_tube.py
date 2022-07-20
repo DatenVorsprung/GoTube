@@ -9,6 +9,7 @@ import time
 from performance_log import log_stat
 from timer import Timer
 from scipy import stats
+from scipy.stats import genextreme, kstest
 import gc
 
 
@@ -67,6 +68,65 @@ def get_probability_none_in_cap(model, radius_points):
 #  use also the discarded points and create balls around them
 def get_probability(model, radius_points):
     return jnp.sqrt(1-model.gamma) * (1 - get_probability_none_in_cap(model, radius_points))
+
+
+def compute_delta_lipschitz(y_jax, fy_jax, axis, gamma):
+    gamma_hat = 1 - jnp.sqrt(1 - gamma)
+    diff_quotients = get_diff_quotient_pairwise(y_jax, fy_jax, axis)
+    sample_size = diff_quotients.size
+    number_of_elements_for_maximum = round(sample_size ** (1 / 4))  # m in Lemma 1, Theorem 2 and throughout paper
+
+    diff_quotients_samples = \
+        diff_quotients[:sample_size - sample_size % number_of_elements_for_maximum].reshape(-1,
+                                                                                            number_of_elements_for_maximum)
+    max_quotients = jnp.nanmax(diff_quotients_samples, axis=1)
+    number_of_maxima = max_quotients.size  # n in Lemma 1
+    print("number of samples for delta_lipschitz: ", number_of_maxima)
+    alpha = min(gamma_hat, 0.5)
+    epsilon = jnp.sqrt(jnp.log(1 / alpha) / (2 * number_of_maxima))
+
+    total_max = jnp.nanmax(diff_quotients_samples)
+
+    c, loc, scale = genextreme.fit(max_quotients)
+    rv_genextreme = genextreme(c, loc, scale)
+
+    D_minus = kstest(max_quotients, rv_genextreme.cdf, alternative='less').statistic
+
+    max_quantile = 0.9999
+
+    # # with generalized extreme value distribution
+    # prob_quantile = min(1 - gamma_hat, max_quantile - epsilon - D_minus)
+    # delta_lipschitz = rv_genextreme.ppf([prob_quantile + epsilon + D_minus])  # transformation of Eq. (S14)
+    # prob_bound_lipschitz = (1 - gamma_hat) * prob_quantile
+
+    # without generalized extreme value distribution
+    max_quotients = jnp.sort(max_quotients)
+    prob_quantile = min(1 - gamma_hat, max_quantile - epsilon)
+    delta_lipschitz = max_quotients[int(jnp.floor((prob_quantile + epsilon) * number_of_maxima))]  # transformation of Eq. (S14)
+    prob_bound_lipschitz = (1 - gamma_hat) * prob_quantile
+
+    # # plot empirical cdf and lower bound
+    # y = np.linspace(jnp.nanmin(diff_quotients_samples), total_max, 1000)
+    # fig, ax = plt.subplots(1, 1)
+    # ax.hist(max_quotients, bins=20, density=True, cumulative=True, histtype='stepfilled', alpha=0.2,
+    #         label='empirical cdf F_n(x)')
+    # ax.plot(y, rv_genextreme.cdf(y), 'b-', lw=2, label='fitted G(x)')
+    # ax.plot(y, rv_genextreme.cdf(y) - 0.1, 'b--', lw=1.5, label='lower bound F_L(x)')
+    # ax.legend()
+    # plt.savefig('Lemma1.pdf')
+
+    return delta_lipschitz, prob_bound_lipschitz
+
+
+def get_diff_quotient_pairwise(x, fx, axis):
+    samples = int(jnp.floor(x.shape[0] / 2))
+    x1 = x[::2][:samples]
+    x2 = x[1::2][:samples]
+    fx1 = fx[::2][:samples]
+    fx2 = fx[1::2][:samples]
+    distance = jnp.linalg.norm(x1 - x2, axis=axis)
+    diff_quotients = abs(fx1 - fx2) / distance * (distance > 0)
+    return diff_quotients
 
 
 def get_diff_quotient(x, fx, y_jax, fy_jax, axis):
@@ -137,20 +197,37 @@ def optimize(model, initial_points, points=None, gradients=None):
             lipschitz = vmap(compute_maximum_singular_value, in_axes=(None, 0))(model, gradients)
 
         with Timer('compute expected local lipschitz'):
+            # # compute expected value of delta lipschitz
+            # dimension_axis = 1
+            # # limit expected value to batch size
+            # diff_quotients = get_diff_quotient_vmap(
+            #     initial_points,
+            #     lipschitz,
+            #     initial_points[:sample_size],
+            #     lipschitz[:sample_size],
+            #     dimension_axis
+            # )
+            #
+            # delta_lipschitz = jnp.nanmean(diff_quotients, axis=dimension_axis) + t_star * jnp.nanstd(diff_quotients, axis=dimension_axis) / jnp.sqrt(sample_size)
+            # del diff_quotients
+            # gc.collect()
+
+            sample_size = points.shape[0]
+
             # compute expected value of delta lipschitz
             dimension_axis = 1
-            # limit expected value to batch size
-            diff_quotients = get_diff_quotient_vmap(
-                initial_points,
-                lipschitz,
+
+            gamma_hat = 1 - jnp.sqrt(1 - model.gamma)
+
+            delta_lipschitz, prob_bound_lipschitz = compute_delta_lipschitz(
                 initial_points[:sample_size],
-                lipschitz[:sample_size],
-                dimension_axis
+                dists[:sample_size],
+                dimension_axis,
+                gamma_hat
             )
 
-            delta_lipschitz = jnp.nanmean(diff_quotients, axis=dimension_axis) + t_star * jnp.nanstd(diff_quotients, axis=dimension_axis) / jnp.sqrt(sample_size)
-            del diff_quotients
-            gc.collect()
+            print('probability correct bound lipschitz')
+            print(prob_bound_lipschitz)
 
         with Timer('get safety region radii'):
             safety_region_radii = get_safety_region_radius(
