@@ -4,7 +4,7 @@ source venv/bin/activate
 
 #Brusselator
 BENCHMARK=bruss
-MU=1.3
+MU=1.1
 TIME_STEP=0.01
 TIME_HORIZON=9
 INITIAL_RADIUS=0.01
