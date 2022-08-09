@@ -2,7 +2,7 @@
 
 import numpy as np
 import jax.numpy as jnp
-from jax import jit, partial
+from jax import jit
 import dynamics
 
 # initialize random polar coordinates with dimension dim
