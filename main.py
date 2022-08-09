@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     if args.score:
         with open("all_prob_scores.csv", "a") as f:
-            # CSV with header benchmark, time-horion, prob, runtime, volume
+            # CSV with header benchmark, time-horizon, prob, runtime, volume
             f.write(f"{args.benchmark},")
             f.write(f"{args.time_horizon:0.4g},")
             f.write(f"{args.radius:0.4g},")
