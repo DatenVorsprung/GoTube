@@ -131,11 +131,13 @@ class StochasticReachtube:
         return cx, F
 
     def compute_metric_and_center(self, time_range, ellipsoids):
+        print(f"Propagating center point for {time_range.shape[0]-1} timesteps")
         cx_timeRange, F_timeRange = self.propagate_center_point(time_range)
         A1_timeRange = np.eye(self.model.dim).reshape(1, self.model.dim, self.model.dim)
         M1_timeRange = np.eye(self.model.dim).reshape(1, self.model.dim, self.model.dim)
         semiAxes_prod_timeRange = np.array([1])
 
+        print("Starting loop for creating metric")
         for idx, t in enumerate(time_range[1:]):
             M1_t, A1_t, semiAxes_prod_t = self.metric(
                 F_timeRange[idx + 1, :, :], ellipsoids
