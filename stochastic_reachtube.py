@@ -179,10 +179,10 @@ class StochasticReachtube:
         return vmap(self.model.fdyn, in_axes=(None, 0))(t, x)
 
     def aug_fdyn_jax(self, aug_state=0, t=0):
-        return pmap(vmap(self.aug_fdyn, in_axes=(None, 1)), in_axes=(None, 0))(t, aug_state)
+        return pmap(vmap(self.aug_fdyn, in_axes=(None, 0)), in_axes=(None, 0))(t, aug_state)
 
     def fdyn_jax(self, x=0, t=0):
-        return pmap(vmap(self.model.fdyn, in_axes=(None, 1)), in_axes=(None, 0))(t, x)
+        return pmap(vmap(self.model.fdyn, in_axes=(None, 0)), in_axes=(None, 0))(t, x)
 
     def create_aug_state(self, polar, rad_t0, cx_t0):
         x = jnp.array(
@@ -204,7 +204,7 @@ class StochasticReachtube:
         return aug_state
 
     def one_step_aug_integrator(self, x, F):
-        aug_state = pmap(vmap(self.create_aug_state_cartesian, in_axes=(1, 1)), in_axes=(0, 0))(x, F)
+        aug_state = pmap(vmap(self.create_aug_state_cartesian))(x, F)
         sol = odeint(
             self.aug_fdyn_jax,
             aug_state,
@@ -212,7 +212,7 @@ class StochasticReachtube:
             atol=self.atol,
             rtol=self.rtol,
         )
-        x, F = pmap(vmap(self.reshape_aug_state_to_matrix, in_axes=1), in_axes=0)(sol[-1])
+        x, F = pmap(vmap(self.reshape_aug_state_to_matrix))(sol[-1])
         return x, F
 
     def aug_integrator(self, polar, step=None):
@@ -222,7 +222,7 @@ class StochasticReachtube:
         rad_t0 = self.rad_t0
         cx_t0 = self.cx_t0
 
-        aug_state, initial_x = pmap(vmap(self.create_aug_state, in_axes=(1, None, None)), in_axes=(0, None, None))(
+        aug_state, initial_x = pmap(vmap(self.create_aug_state, in_axes=(0, None, None)), in_axes=(0, None, None))(
             polar, rad_t0, cx_t0
         )
         sol = odeint(
@@ -232,17 +232,17 @@ class StochasticReachtube:
             atol=self.atol,
             rtol=self.rtol,
         )
-        x, F = pmap(vmap(self.reshape_aug_state_to_matrix, in_axes=1), in_axes=0)(sol[-1])
+        x, F = pmap(vmap(self.reshape_aug_state_to_matrix))(sol[-1])
         return x, F, initial_x
 
     def aug_integrator_neg_dist(self, polar):
         x, F, initial_x = self.aug_integrator(polar)
-        neg_dist = pmap(vmap(self.neg_dist_x, in_axes=1), in_axes=0)(x)
+        neg_dist = pmap(vmap(self.neg_dist_x))(x)
         return x, F, neg_dist, initial_x
 
     def one_step_aug_integrator_dist(self, x, F):
         x, F = self.one_step_aug_integrator(x, F)
-        neg_dist = pmap(vmap(self.neg_dist_x, in_axes=1), in_axes=0)(x)
+        neg_dist = pmap(vmap(self.neg_dist_x))(x)
         return x, F, -neg_dist
 
     def neg_dist_x(self, xt):

@@ -24,9 +24,9 @@ def get_safety_region_radius(model, dist, dist_best, lip, lip_mean_diff):
     return safety_radius
 
 
-def compute_maximum_singular_value(model, F):
-    F_metric = jnp.matmul(model.A1, F)
-    F_metric = jnp.matmul(F_metric, model.A0inv)
+def compute_maximum_singular_value(A1, A0inv, F):
+    F_metric = jnp.matmul(A1, F)
+    F_metric = jnp.matmul(F_metric, A0inv)
     _, sf, _ = svd(F_metric)
     max_sf = jnp.max(sf)
 
@@ -76,9 +76,9 @@ def compute_delta_lipschitz(y_jax, fy_jax, axis, gamma):
     sample_size = diff_quotients.size
     number_of_elements_for_maximum = round(sample_size ** (1 / 4))  # m in Lemma 1, Theorem 2 and throughout paper
 
-    diff_quotients_samples = \
-        diff_quotients[:sample_size - sample_size % number_of_elements_for_maximum].reshape(-1,
-                                                                                            number_of_elements_for_maximum)
+    sample_size_dividable = sample_size - sample_size % number_of_elements_for_maximum
+
+    diff_quotients_samples = diff_quotients[:sample_size_dividable].reshape(-1, number_of_elements_for_maximum)
     max_quotients = jnp.nanmax(diff_quotients_samples, axis=1)
     number_of_maxima = max_quotients.size  # n in Lemma 1
     print("number of samples for delta_lipschitz: ", number_of_maxima)
@@ -119,7 +119,10 @@ def compute_delta_lipschitz(y_jax, fy_jax, axis, gamma):
 
 
 def get_diff_quotient_pairwise(x, fx, axis):
-    x = jnp.reshape(x, (-1, x.shape[2]))  # reshape to get samples as first index and remove gpu dimension
+    # reshape to get samples as first index and remove gpu dimension
+    x = jnp.reshape(x, (-1, x.shape[2]))
+    fx = jnp.reshape(fx, fx.size)
+
     samples = int(jnp.floor(x.shape[0] / 2))
     x1 = x[::2][:samples]
     x2 = x[1::2][:samples]
@@ -195,7 +198,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
         with Timer('compute lipschitz'):
             # compute maximum singular values of all new gradient matrices
-            lipschitz = pmap(vmap(compute_maximum_singular_value, in_axes=(None, 1)), in_axes=(None, 0))(model, gradients)
+            lipschitz = pmap(vmap(compute_maximum_singular_value, in_axes=(None, None, 0)), in_axes=(None, None, 0))(model.A1, model.A0inv, gradients)
 
         with Timer('compute expected local lipschitz'):
             # # compute expected value of delta lipschitz
