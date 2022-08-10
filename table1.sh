@@ -33,7 +33,7 @@ python main.py --time_horizon $TIME_HORIZON --mu $MU --benchmark $BENCHMARK --ba
 #Dubins car
 BENCHMARK=dubins
 TIME_STEP=0.1
-TIME_HORIZON=60
+TIME_HORIZON=15
 INITIAL_RADIUS=0.01
 # new parameters - to be defined
 python main.py --time_horizon $TIME_HORIZON --mu $MU --benchmark $BENCHMARK --batch_size 10 --time_step $TIME_STEP --radius $INITIAL_RADIUS --gamma 0.1 --score
