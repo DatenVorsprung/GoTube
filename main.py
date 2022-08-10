@@ -31,6 +31,8 @@ if __name__ == "__main__":
     parser.add_argument("--time_horizon", default=10, type=float)
     # batch-size for tensorization
     parser.add_argument("--batch_size", default=10000, type=int)
+    # number of GPUs for parallelization
+    parser.add_argument("--num_gpus", default=1, type=int)
     # error-probability
     parser.add_argument("--gamma", default=0.2, type=float)
     # mu as maximum over-approximation
@@ -54,6 +56,7 @@ if __name__ == "__main__":
         mu=args.mu,  # mu as maximum over-approximation
         gamma=args.gamma,  # error-probability
         batch=args.batch_size,
+        num_gpus=args.num_gpus,
         radius=args.radius,
     )  # reachtube
 
@@ -79,7 +82,7 @@ if __name__ == "__main__":
 
     total_random_points = None
     total_gradients = None
-    total_initial_points = jnp.zeros((0, rt.model.dim))
+    total_initial_points = jnp.zeros((rt.num_gpus, 0, rt.model.dim))
 
     # for loop starting at Line 2
     for i, time_py in enumerate(timeRange):

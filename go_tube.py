@@ -1,7 +1,7 @@
 # Algorithms of SLR paper for safety region, probability and stoch. optimization
 
 import jax.numpy as jnp
-from jax import vmap
+from jax import vmap, pmap
 import polar_coordinates as pol
 from jax.numpy.linalg import svd
 import jax.scipy.special as sc
@@ -119,6 +119,7 @@ def compute_delta_lipschitz(y_jax, fy_jax, axis, gamma):
 
 
 def get_diff_quotient_pairwise(x, fx, axis):
+    x = jnp.reshape(x, (-1, x.shape[2]))  # reshape to get samples as first index and remove gpu dimension
     samples = int(jnp.floor(x.shape[0] / 2))
     x1 = x[::2][:samples]
     x2 = x[1::2][:samples]
@@ -151,7 +152,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
     if points is None or gradients is None:
         previous_samples = 0
-        phis = pol.init_random_phi(model.model.dim, model.batch)
+        phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus)
         points, gradients, neg_dists, initial_points = model.aug_integrator_neg_dist(phis)
         dists = -neg_dists
         del neg_dists
@@ -170,7 +171,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
         if not first_iteration:
             with Timer('sample phis'):
-                phis = pol.init_random_phi(model.model.dim, model.batch)
+                phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus)
             with Timer('compute first integration step and dist'):
                 new_points, new_gradients, new_neg_dists, new_initial_points = model.aug_integrator_neg_dist(phis)
                 new_dists = -new_neg_dists
@@ -179,10 +180,10 @@ def optimize(model, initial_points, points=None, gradients=None):
                 gc.collect()
 
             with Timer('concatenate new points to tensors'):
-                points = jnp.concatenate((points, new_points), axis=0)
-                gradients = jnp.concatenate((gradients, new_gradients), axis=0)
-                dists = jnp.concatenate((dists, new_dists), axis=0)
-                initial_points = jnp.concatenate((initial_points, new_initial_points), axis=0)
+                points = jnp.concatenate((points, new_points), axis=1)
+                gradients = jnp.concatenate((gradients, new_gradients), axis=1)
+                dists = jnp.concatenate((dists, new_dists), axis=1)
+                initial_points = jnp.concatenate((initial_points, new_initial_points), axis=1)
                 del new_points
                 del new_gradients
                 del new_dists
@@ -194,7 +195,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
         with Timer('compute lipschitz'):
             # compute maximum singular values of all new gradient matrices
-            lipschitz = vmap(compute_maximum_singular_value, in_axes=(None, 0))(model, gradients)
+            lipschitz = pmap(vmap(compute_maximum_singular_value, in_axes=(None, 1)), in_axes=(None, 0))(model, gradients)
 
         with Timer('compute expected local lipschitz'):
             # # compute expected value of delta lipschitz
@@ -249,13 +250,13 @@ def optimize(model, initial_points, points=None, gradients=None):
             print("current probability is: ")
             print(prob)
             print("number of samples: ")
-            print(points.shape[0])
+            print(model.num_gpus * points.shape[1])
 
         first_iteration = False
 
     print('prob after loop: %s' % prob)
 
-    new_samples = points.shape[0] - previous_samples
+    new_samples = model.num_gpus * points.shape[1] - previous_samples
 
     print(
         f"Visited {new_samples} new points in {time.time() - start_time:0.2f} seconds."

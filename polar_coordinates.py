@@ -10,11 +10,11 @@ import dynamics
 _rng = np.random.RandomState(12937)
 
 
-def init_random_phi(dim, samples=1):
+def init_random_phi(dim, samples=1, num_gpus=1):
     global _rng
     phi = _rng.uniform(0, jnp.pi, samples * (dim - 2))
     phi = jnp.append(phi, _rng.uniform(0, 2 * jnp.pi, samples))
-    phi = jnp.reshape(phi, (samples, dim - 1), order="F")
+    phi = jnp.reshape(phi, (num_gpus, samples // num_gpus, dim - 1), order="F")
 
     return phi
 
