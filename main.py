@@ -136,6 +136,6 @@ if __name__ == "__main__":
     if rt.profile:
         final_notes = {
             "total_time": time.time() - start_time,
-            "samples": total_random_points.shape[0],
+            "samples": args.num_gpus * total_random_points.shape[1],
         }
         close_log(final_notes)

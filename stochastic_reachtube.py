@@ -3,7 +3,7 @@
 import numpy as np
 import jax.numpy as jnp
 from jax.experimental.ode import odeint
-from jax import vmap, jit, pmap
+from jax import vmap, jit, pmap, device_put, devices
 from functools import partial
 
 from scipy.special import gamma
@@ -121,7 +121,8 @@ class StochasticReachtube:
     def propagate_center_point(self, time_range):
         cx_jax = self.model.cx.reshape(1, self.model.dim)
         F = jnp.eye(self.model.dim)
-        aug_state = jnp.concatenate((cx_jax, F)).reshape(1, -1)
+        aug_state = device_put(jnp.concatenate((cx_jax, F)).reshape(1, -1), device=devices("cpu")[0])
+        # print(aug_state.device_buffer.device())
         sol = odeint(
             self.aug_fdyn_jax_no_pmap,
             aug_state,
