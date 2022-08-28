@@ -81,7 +81,6 @@ def compute_delta_lipschitz(y_jax, fy_jax, axis, gamma):
     diff_quotients_samples = diff_quotients[:sample_size_dividable].reshape(-1, number_of_elements_for_maximum)
     max_quotients = jnp.nanmax(diff_quotients_samples, axis=1)
     number_of_maxima = max_quotients.size  # n in Lemma 1
-    print("number of samples for delta_lipschitz: ", number_of_maxima)
     alpha = min(gamma_hat, 0.5)
     epsilon = jnp.sqrt(jnp.log(1 / alpha) / (2 * number_of_maxima))
 
@@ -155,14 +154,14 @@ def optimize(model, initial_points, points=None, gradients=None):
 
     if points is None or gradients is None:
         previous_samples = 0
-        phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus)
+        phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus, model.fixed_seed)
         points, gradients, neg_dists, initial_points = model.aug_integrator_neg_dist(phis)
         dists = -neg_dists
         del neg_dists
         del phis
         gc.collect()
     else:
-        previous_samples = points.shape[0]
+        previous_samples = points.shape[1]
         with Timer('integrate random points and gradients - one step'):
             points, gradients, dists = model.one_step_aug_integrator_dist(
                 points, gradients
@@ -174,7 +173,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
         if not first_iteration:
             with Timer('sample phis'):
-                phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus)
+                phis = pol.init_random_phi(model.model.dim, model.batch, model.num_gpus, model.fixed_seed)
             with Timer('compute first integration step and dist'):
                 new_points, new_gradients, new_neg_dists, new_initial_points = model.aug_integrator_neg_dist(phis)
                 new_dists = -new_neg_dists
@@ -201,21 +200,6 @@ def optimize(model, initial_points, points=None, gradients=None):
             lipschitz = pmap(vmap(compute_maximum_singular_value, in_axes=(None, None, 0)), in_axes=(None, None, 0))(model.A1, model.A0inv, gradients)
 
         with Timer('compute expected local lipschitz'):
-            # # compute expected value of delta lipschitz
-            # dimension_axis = 1
-            # # limit expected value to batch size
-            # diff_quotients = get_diff_quotient_vmap(
-            #     initial_points,
-            #     lipschitz,
-            #     initial_points[:sample_size],
-            #     lipschitz[:sample_size],
-            #     dimension_axis
-            # )
-            #
-            # delta_lipschitz = jnp.nanmean(diff_quotients, axis=dimension_axis) + t_star * jnp.nanstd(diff_quotients, axis=dimension_axis) / jnp.sqrt(sample_size)
-            # del diff_quotients
-            # gc.collect()
-
             sample_size = points.shape[0]
 
             # compute expected value of delta lipschitz
@@ -230,9 +214,6 @@ def optimize(model, initial_points, points=None, gradients=None):
                 gamma_hat
             )
 
-            print('probability correct bound lipschitz')
-            print(prob_bound_lipschitz)
-
         with Timer('get safety region radii'):
             safety_region_radii = get_safety_region_radius(
                 model, dists, dist_best, lipschitz, delta_lipschitz
@@ -246,31 +227,21 @@ def optimize(model, initial_points, points=None, gradients=None):
             del safety_region_radii
             gc.collect()
 
-        if first_iteration:
-            print("start probability is: ")
-            print(prob)
-        else:
-            print("current probability is: ")
-            print(prob)
-            print("number of samples: ")
-            print(model.num_gpus * points.shape[1])
+        print(f"Current probability coverage is {100.0 * prob:0.3f}% using {model.num_gpus * points.shape[1]} points")
 
         first_iteration = False
 
-    print('prob after loop: %s' % prob)
-
     new_samples = model.num_gpus * points.shape[1] - previous_samples
 
+    print("Probability reached given value!")
     print(
         f"Visited {new_samples} new points in {time.time() - start_time:0.2f} seconds."
-        # Current probability coverage {100.0 * prob:0.3f}%"
     )
-    print("Probability reached given value!")
 
     dist_with_safety_mu = model.mu * dist_best
 
     if model.profile:
-        # If profiling is enabled, log some statistics about the GD optimization process
+        # If profiling is enabled, log some statistics about the optimization process
         stat_dict = {
             "loop_time": time.time() - start_time,
             "new_points": int(new_samples),

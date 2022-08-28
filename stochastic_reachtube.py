@@ -28,6 +28,7 @@ class StochasticReachtube:
         samples=100,  # just for plotting: number of random points on the border of the initial ball
         batch=1,  # number of initial points for vectorization
         num_gpus=1,  # number of GPUs for parallel computation
+        fixed_seed=False,  # specify whether a fixed seed should be used (only for comparing different algorithms)
         axis1=0,  # axis to project reachtube to
         axis2=1,
         atol=1e-10,  # absolute tolerance of integration
@@ -48,6 +49,7 @@ class StochasticReachtube:
         self.samples = samples
         self.batch = batch
         self.num_gpus = num_gpus
+        self.fixed_seed = fixed_seed
         self.axis1 = axis1
         self.axis2 = axis2
         self.atol = atol
