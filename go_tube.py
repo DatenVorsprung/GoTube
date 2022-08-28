@@ -225,7 +225,7 @@ def optimize(model, initial_points, points=None, gradients=None):
 
             delta_lipschitz, prob_bound_lipschitz = compute_delta_lipschitz(
                 initial_points[:sample_size],
-                dists[:sample_size],
+                lipschitz[:sample_size],
                 dimension_axis,
                 gamma_hat
             )
