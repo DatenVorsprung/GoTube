@@ -33,6 +33,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=10000, type=int)
     # number of GPUs for parallelization
     parser.add_argument("--num_gpus", default=1, type=int)
+    # use fixed seed for random points (only for comparing different algorithms)
+    parser.add_argument("--fixed_seed", action="store_true")
     # error-probability
     parser.add_argument("--gamma", default=0.2, type=float)
     # mu as maximum over-approximation
@@ -57,6 +59,7 @@ if __name__ == "__main__":
         gamma=args.gamma,  # error-probability
         batch=args.batch_size,
         num_gpus=args.num_gpus,
+        fixed_seed=args.fixed_seed,
         radius=args.radius,
     )  # reachtube
 
