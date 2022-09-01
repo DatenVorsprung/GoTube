@@ -44,6 +44,7 @@ class StochasticReachtube:
         plot_grid=50,
         mu=1.5,
         gamma=0.01,
+        radius=False,
     ):
 
         self.time_step = min(time_step, time_horizon)
