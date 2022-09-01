@@ -12,8 +12,6 @@ from performance_log import create_plot_file
 from performance_log import write_plot_file
 from performance_log import log_stat
 
-from scipy.special import gamma
-
 import argparse
 
 
@@ -99,7 +97,7 @@ if __name__ == "__main__":
         rt.A1 = A1_timeRange[i + 1, :, :]
 
         #  GoTube Algorithm for t = t_j
-        #  while loop from Line 5 - Line 12
+        #  while loop from Line 5 - Line 15
         (
             rt.cur_rad,
             prob,

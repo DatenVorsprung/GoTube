@@ -1,4 +1,4 @@
-# optimization problem solved with vanilla gradient descent
+# optimization problem
 
 import numpy as np
 import jax.numpy as jnp
@@ -12,6 +12,14 @@ from scipy.special import gamma
 import benchmarks as bm
 import polar_coordinates as pol
 import dynamics
+
+
+def create_aug_state_cartesian(x, F):
+    aug_state = jnp.concatenate((jnp.array([x]), F)).reshape(
+        -1
+    )  # reshape to row vector
+
+    return aug_state
 
 
 class StochasticReachtube:
@@ -36,7 +44,6 @@ class StochasticReachtube:
         plot_grid=50,
         mu=1.5,
         gamma=0.01,
-        radius=False,
     ):
 
         self.time_step = min(time_step, time_horizon)
@@ -125,8 +132,8 @@ class StochasticReachtube:
     def propagate_center_point(self, time_range):
         cx_jax = self.model.cx.reshape(1, self.model.dim)
         F = jnp.eye(self.model.dim)
+        # put aug_state in CPU, as it is faster for odeint than GPU
         aug_state = device_put(jnp.concatenate((cx_jax, F)).reshape(1, -1), device=devices("cpu")[0])
-        # print(aug_state.device_buffer.device())
         sol = odeint(
             self.aug_fdyn_jax_no_pmap,
             aug_state,
@@ -201,15 +208,8 @@ class StochasticReachtube:
 
         return aug_state, x
 
-    def create_aug_state_cartesian(self, x, F):
-        aug_state = jnp.concatenate((jnp.array([x]), F)).reshape(
-            -1
-        )  # reshape to row vector
-
-        return aug_state
-
     def one_step_aug_integrator(self, x, F):
-        aug_state = pmap(vmap(self.create_aug_state_cartesian))(x, F)
+        aug_state = pmap(vmap(create_aug_state_cartesian))(x, F)
         sol = odeint(
             self.aug_fdyn_jax,
             aug_state,
