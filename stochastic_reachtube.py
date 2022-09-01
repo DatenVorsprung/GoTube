@@ -90,6 +90,8 @@ class StochasticReachtube:
 
     def plot_traces(self, axis_3d):
         rd_polar = pol.init_random_phi(self.model.dim, self.samples)
+        # reshape to get samples as first index and remove gpu dimension
+        rd_polar = jnp.reshape(rd_polar, (-1, rd_polar.shape[2]))
         rd_x = (
             vmap(pol.polar2cart, in_axes=(None, 0))(self.model.rad, rd_polar)
             + self.model.cx
@@ -97,7 +99,7 @@ class StochasticReachtube:
         plot_timerange = jnp.arange(0, self.time_horizon + 1e-9, self.h_traces)
 
         sol = odeint(
-            self.fdyn_jax,
+            self.fdyn_jax_no_pmap,
             rd_x,
             plot_timerange,
             atol=self.atol,
