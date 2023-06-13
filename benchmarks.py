@@ -1,10 +1,18 @@
 # different classes with benchmarks
 
+import os
 import jax.numpy as np
 from jax.numpy import tanh
 from jax.numpy import sin
 from jax.numpy import cos
 from jax.numpy import exp
+import pickle
+
+import jax.numpy as jnp
+import flax.linen as nn
+from flax.linen.initializers import constant, orthogonal
+from typing import Sequence
+import distrax
 
 
 def get_model(benchmark, radius=None):
@@ -34,6 +42,8 @@ def get_model(benchmark, radius=None):
         return PendulumwithCTRNN(radius)  # Benchmark to run
     elif benchmark == "CTRNNosc":
         return CTRNNosc(radius)  # Benchmark to run
+    elif benchmark == 'mlp':
+        return CartPoleMLP(radius)
     else:
         raise ValueError("Unknown benchmark " + benchmark)
 
@@ -1511,3 +1521,86 @@ class CTRNNosc:
         hidden = np.tanh(np.dot(x, self.params["w1"]) + self.params["b1"])
         dhdt = np.dot(hidden, self.params["w2"]) + self.params["b2"]
         return dhdt
+
+
+class CartPoleMLP:
+    def __init__(self, radius):
+        # ============ adapt initial values ===========
+        if radius is not None:
+            self.rad = radius
+        else:
+            self.rad = 0.1
+        self.cx = np.zeros(4)
+        self.dim = self.cx.size  # dimension of the system
+        # ===================================================
+
+        class ActorCritic(nn.Module):
+            action_dim: Sequence[int]
+            activation: str = "tanh"
+
+            @nn.compact
+            def __call__(self, x):
+                if self.activation == "relu":
+                    activation = nn.relu
+                else:
+                    activation = nn.tanh
+                actor_mean = nn.Dense(
+                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+                )(x)
+                actor_mean = activation(actor_mean)
+                actor_mean = nn.Dense(
+                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+                )(actor_mean)
+                actor_mean = activation(actor_mean)
+                actor_mean = nn.Dense(
+                    self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
+                )(actor_mean)
+                actor_logtstd = self.param('log_std', nn.initializers.zeros, (self.action_dim,))
+                pi = distrax.MultivariateNormalDiag(actor_mean, jnp.exp(actor_logtstd))
+
+                critic = nn.Dense(
+                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+                )(x)
+                critic = activation(critic)
+                critic = nn.Dense(
+                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+                )(critic)
+                critic = activation(critic)
+                critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
+                    critic
+                )
+
+                return pi, jnp.squeeze(critic, axis=-1)
+
+        self.params = pickle.load(open(os.path.dirname(__file__) + "/rl/cartpole_mlp.pkl", "rb"))
+        self.policy = ActorCritic(1)
+        # self.policy.config['explore'] = False  # make deterministic
+
+        # CARTPOLE config
+        self.gravity = 9.8
+        self.masscart = 1.0
+        self.masspole = 0.1
+        self.total_mass = (self.masspole + self.masscart)
+        self.length = 0.5  # actually half the pole's length
+        self.polemass_length = (self.masspole * self.length)
+        self.force_mag = 10.0
+        self.tau = 0.02  # seconds between state updates
+        self.elapsed_time = 0.0
+        self.kinematics_integrator = 'euler'
+
+    def fdyn(self, t=0, state=None):
+        if state is None:
+            state = np.zeros(self.dim, dtype=object)
+
+        action = self.policy.apply(self.params, state)[0].loc[0]
+
+        x, x_dot, theta, theta_dot = state
+        force = self.force_mag * action
+        costheta = jnp.cos(theta)
+        sintheta = jnp.sin(theta)
+        temp = (force + self.polemass_length * theta_dot * theta_dot * sintheta) / self.total_mass
+        thetaacc = (self.gravity * sintheta - costheta * temp) / (self.length * (4.0 / 3.0 - self.masspole * costheta * costheta / self.total_mass))
+        xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
+        dxdt = jnp.stack((x_dot, xacc, theta_dot, thetaacc))
+
+        return dxdt
