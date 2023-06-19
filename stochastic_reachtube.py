@@ -1,9 +1,9 @@
 # optimization problem solved with vanilla gradient descent
-
+from functools import partial
 import numpy as np
 import jax.numpy as jnp
 from jax.experimental.ode import odeint
-from jax import vmap, partial, jit
+from jax import vmap, jit
 
 from scipy.special import gamma
 

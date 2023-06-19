@@ -1534,46 +1534,7 @@ class CartPoleMLP:
         self.dim = self.cx.size  # dimension of the system
         # ===================================================
 
-        class ActorCritic(nn.Module):
-            action_dim: Sequence[int]
-            activation: str = "tanh"
-
-            @nn.compact
-            def __call__(self, x):
-                if self.activation == "relu":
-                    activation = nn.relu
-                else:
-                    activation = nn.tanh
-                actor_mean = nn.Dense(
-                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-                )(x)
-                actor_mean = activation(actor_mean)
-                actor_mean = nn.Dense(
-                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-                )(actor_mean)
-                actor_mean = activation(actor_mean)
-                actor_mean = nn.Dense(
-                    self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
-                )(actor_mean)
-                actor_logtstd = self.param('log_std', nn.initializers.zeros, (self.action_dim,))
-                pi = distrax.MultivariateNormalDiag(actor_mean, jnp.exp(actor_logtstd))
-
-                critic = nn.Dense(
-                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-                )(x)
-                critic = activation(critic)
-                critic = nn.Dense(
-                    256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-                )(critic)
-                critic = activation(critic)
-                critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
-                    critic
-                )
-
-                return pi, jnp.squeeze(critic, axis=-1)
-
         self.params = pickle.load(open(os.path.dirname(__file__) + "/rl/cartpole_mlp.pkl", "rb"))
-        self.policy = ActorCritic(1)
         # self.policy.config['explore'] = False  # make deterministic
 
         # CARTPOLE config
@@ -1592,7 +1553,11 @@ class CartPoleMLP:
         if state is None:
             state = np.zeros(self.dim, dtype=object)
 
-        action = self.policy.apply(self.params, state)[0].loc[0]
+        # Forward pass of MLP with tanh activation
+        x = jnp.tanh(jnp.dot(state, self.params["w1"]) + self.params["b1"])
+        x = jnp.tanh(jnp.dot(x, self.params["w2"]) + self.params["b2"])
+        action = jnp.dot(x, self.params["w3"]) + self.params["b3"]
+        action = action[0]
 
         x, x_dot, theta, theta_dot = state
         force = self.force_mag * action
