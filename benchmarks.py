@@ -78,7 +78,7 @@ class VanDerPol:
         if radius is not None:
             self.rad = radius
         else:
-            self.rad = 0.5
+            self.rad = 0.1
         # ===================================================
         self.cx = np.array(self.cx, dtype=float)
         self.dim = self.cx.size  # dimension of the system

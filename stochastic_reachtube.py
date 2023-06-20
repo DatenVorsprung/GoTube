@@ -1,9 +1,10 @@
-# optimization problem solved with vanilla gradient descent
+# optimization problem
 
 import numpy as np
 import jax.numpy as jnp
 from jax.experimental.ode import odeint
-from jax import vmap, partial, jit
+from jax import vmap, jit, pmap, device_put, devices
+from functools import partial
 
 from scipy.special import gamma
 
@@ -11,6 +12,14 @@ from scipy.special import gamma
 import benchmarks as bm
 import polar_coordinates as pol
 import dynamics
+
+
+def create_aug_state_cartesian(x, F):
+    aug_state = jnp.concatenate((jnp.array([x]), F)).reshape(
+        -1
+    )  # reshape to row vector
+
+    return aug_state
 
 
 class StochasticReachtube:
@@ -26,6 +35,8 @@ class StochasticReachtube:
         max_step_optim=0.1,  # maximum time_step for optimization
         samples=100,  # just for plotting: number of random points on the border of the initial ball
         batch=1,  # number of initial points for vectorization
+        num_gpus=1,  # number of GPUs for parallel computation
+        fixed_seed=False,  # specify whether a fixed seed should be used (only for comparing different algorithms)
         axis1=0,  # axis to project reachtube to
         axis2=1,
         atol=1e-10,  # absolute tolerance of integration
@@ -45,6 +56,8 @@ class StochasticReachtube:
         self.time_horizon = time_horizon
         self.samples = samples
         self.batch = batch
+        self.num_gpus = num_gpus
+        self.fixed_seed = fixed_seed
         self.axis1 = axis1
         self.axis2 = axis2
         self.atol = atol
@@ -85,6 +98,8 @@ class StochasticReachtube:
 
     def plot_traces(self, axis_3d):
         rd_polar = pol.init_random_phi(self.model.dim, self.samples)
+        # reshape to get samples as first index and remove gpu dimension
+        rd_polar = jnp.reshape(rd_polar, (-1, rd_polar.shape[2]))
         rd_x = (
             vmap(pol.polar2cart, in_axes=(None, 0))(self.model.rad, rd_polar)
             + self.model.cx
@@ -92,7 +107,7 @@ class StochasticReachtube:
         plot_timerange = jnp.arange(0, self.time_horizon + 1e-9, self.h_traces)
 
         sol = odeint(
-            self.fdyn_jax,
+            self.fdyn_jax_no_pmap,
             rd_x,
             plot_timerange,
             atol=self.atol,
@@ -118,9 +133,10 @@ class StochasticReachtube:
     def propagate_center_point(self, time_range):
         cx_jax = self.model.cx.reshape(1, self.model.dim)
         F = jnp.eye(self.model.dim)
-        aug_state = jnp.concatenate((cx_jax, F)).reshape(1, -1)
+        # put aug_state in CPU, as it is faster for odeint than GPU
+        aug_state = device_put(jnp.concatenate((cx_jax, F)).reshape(1, -1), device=devices("cpu")[0])
         sol = odeint(
-            self.aug_fdyn_jax,
+            self.aug_fdyn_jax_no_pmap,
             aug_state,
             time_range,
             atol=self.atol,
@@ -130,11 +146,13 @@ class StochasticReachtube:
         return cx, F
 
     def compute_metric_and_center(self, time_range, ellipsoids):
+        print(f"Propagating center point for {time_range.shape[0]-1} timesteps")
         cx_timeRange, F_timeRange = self.propagate_center_point(time_range)
         A1_timeRange = np.eye(self.model.dim).reshape(1, self.model.dim, self.model.dim)
         M1_timeRange = np.eye(self.model.dim).reshape(1, self.model.dim, self.model.dim)
         semiAxes_prod_timeRange = np.array([1])
 
+        print("Starting loop for creating metric")
         for idx, t in enumerate(time_range[1:]):
             M1_t, A1_t, semiAxes_prod_t = self.metric(
                 F_timeRange[idx + 1, :, :], ellipsoids
@@ -167,11 +185,17 @@ class StochasticReachtube:
         F_return = jnp.matmul(self.f_jac_at(t, x), F)
         return self.reshape_aug_fdyn_return_to_vector(fdyn_return, F_return)
 
-    def aug_fdyn_jax(self, aug_state=0, t=0):
+    def aug_fdyn_jax_no_pmap(self, aug_state=0, t=0):
         return vmap(self.aug_fdyn, in_axes=(None, 0))(t, aug_state)
 
-    def fdyn_jax(self, x=0, t=0):
+    def fdyn_jax_no_pmap(self, x=0, t=0):
         return vmap(self.model.fdyn, in_axes=(None, 0))(t, x)
+
+    def aug_fdyn_jax(self, aug_state=0, t=0):
+        return pmap(vmap(self.aug_fdyn, in_axes=(None, 0)), in_axes=(None, 0))(t, aug_state)
+
+    def fdyn_jax(self, x=0, t=0):
+        return pmap(vmap(self.model.fdyn, in_axes=(None, 0)), in_axes=(None, 0))(t, x)
 
     def create_aug_state(self, polar, rad_t0, cx_t0):
         x = jnp.array(
@@ -185,15 +209,8 @@ class StochasticReachtube:
 
         return aug_state, x
 
-    def create_aug_state_cartesian(self, x, F):
-        aug_state = jnp.concatenate((jnp.array([x]), F)).reshape(
-            -1
-        )  # reshape to row vector
-
-        return aug_state
-
     def one_step_aug_integrator(self, x, F):
-        aug_state = vmap(self.create_aug_state_cartesian, in_axes=(0, 0))(x, F)
+        aug_state = pmap(vmap(create_aug_state_cartesian))(x, F)
         sol = odeint(
             self.aug_fdyn_jax,
             aug_state,
@@ -201,7 +218,7 @@ class StochasticReachtube:
             atol=self.atol,
             rtol=self.rtol,
         )
-        x, F = vmap(self.reshape_aug_state_to_matrix)(sol[-1])
+        x, F = pmap(vmap(self.reshape_aug_state_to_matrix))(sol[-1])
         return x, F
 
     def aug_integrator(self, polar, step=None):
@@ -211,7 +228,7 @@ class StochasticReachtube:
         rad_t0 = self.rad_t0
         cx_t0 = self.cx_t0
 
-        aug_state, initial_x = vmap(self.create_aug_state, in_axes=(0, None, None))(
+        aug_state, initial_x = pmap(vmap(self.create_aug_state, in_axes=(0, None, None)), in_axes=(0, None, None))(
             polar, rad_t0, cx_t0
         )
         sol = odeint(
@@ -221,17 +238,17 @@ class StochasticReachtube:
             atol=self.atol,
             rtol=self.rtol,
         )
-        x, F = vmap(self.reshape_aug_state_to_matrix)(sol[-1])
+        x, F = pmap(vmap(self.reshape_aug_state_to_matrix))(sol[-1])
         return x, F, initial_x
 
     def aug_integrator_neg_dist(self, polar):
         x, F, initial_x = self.aug_integrator(polar)
-        neg_dist = vmap(self.neg_dist_x)(x)
+        neg_dist = pmap(vmap(self.neg_dist_x))(x)
         return x, F, neg_dist, initial_x
 
     def one_step_aug_integrator_dist(self, x, F):
         x, F = self.one_step_aug_integrator(x, F)
-        neg_dist = vmap(self.neg_dist_x)(x)
+        neg_dist = pmap(vmap(self.neg_dist_x))(x)
         return x, F, -neg_dist
 
     def neg_dist_x(self, xt):
