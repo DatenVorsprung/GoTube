@@ -4,7 +4,6 @@ import jax.numpy as jnp
 import numpy as np
 from jax import jacfwd, jacrev, jit
 
-from scipy.linalg import expm
 from scipy.linalg import eigh
 from numpy.linalg import inv
 import benchmarks as bm
@@ -34,11 +33,6 @@ class FunctionDynamics:
             W = abs(W)  # to prevent nan-errors
 
             semiAxes = 1 / np.sqrt(W)  # needed to compute volume of ellipse
-
-            # Wm = semiAxes * np.eye(self.model.dim)
-            # A1inv = (Wm @ v.T).T
-            # A1 = inv(A1inv)
-            # M1 = A1.T @ A1
 
         else:
             A1 = np.eye(Fmid.shape[0])

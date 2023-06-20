@@ -13,9 +13,10 @@ from performance_log import create_plot_file
 from performance_log import write_plot_file
 from performance_log import log_stat
 
-from scipy.special import gamma
-
 import argparse
+
+from jax import config
+config.update("jax_enable_x64", True)
 
 
 if __name__ == "__main__":
@@ -32,6 +33,10 @@ if __name__ == "__main__":
     parser.add_argument("--time_horizon", default=10, type=float)
     # batch-size for tensorization
     parser.add_argument("--batch_size", default=10000, type=int)
+    # number of GPUs for parallelization
+    parser.add_argument("--num_gpus", default=1, type=int)
+    # use fixed seed for random points (only for comparing different algorithms)
+    parser.add_argument("--fixed_seed", action="store_true")
     # error-probability
     parser.add_argument("--gamma", default=0.2, type=float)
     # mu as maximum over-approximation
@@ -55,6 +60,8 @@ if __name__ == "__main__":
         mu=args.mu,  # mu as maximum over-approximation
         gamma=args.gamma,  # error-probability
         batch=args.batch_size,
+        num_gpus=args.num_gpus,
+        fixed_seed=args.fixed_seed,
         radius=args.radius,
     )  # reachtube
 
@@ -80,7 +87,7 @@ if __name__ == "__main__":
 
     total_random_points = None
     total_gradients = None
-    total_initial_points = jnp.zeros((0, rt.model.dim))
+    total_initial_points = jnp.zeros((rt.num_gpus, 0, rt.model.dim))
 
     # for loop starting at Line 2
     for i, time_py in enumerate(timeRange):
@@ -94,7 +101,7 @@ if __name__ == "__main__":
         rt.A1 = A1_timeRange[i + 1, :, :]
 
         #  GoTube Algorithm for t = t_j
-        #  while loop from Line 5 - Line 12
+        #  while loop from Line 5 - Line 15
         (
             rt.cur_rad,
             prob,
@@ -121,7 +128,7 @@ if __name__ == "__main__":
 
     if args.score:
         with open("all_prob_scores.csv", "a") as f:
-            # CSV with header benchmark, time-horion, prob, runtime, volume
+            # CSV with header benchmark, time-horizon, prob, runtime, volume
             f.write(f"{args.benchmark},")
             f.write(f"{args.time_horizon:0.4g},")
             f.write(f"{args.radius:0.4g},")
@@ -134,6 +141,6 @@ if __name__ == "__main__":
     if rt.profile:
         final_notes = {
             "total_time": time.time() - start_time,
-            "samples": total_random_points.shape[0],
+            "samples": args.num_gpus * total_random_points.shape[1],
         }
         close_log(final_notes)

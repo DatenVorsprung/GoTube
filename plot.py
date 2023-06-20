@@ -1,4 +1,4 @@
-# plotting the outputs from LRT-NG (ellipse, circle, intersections etc.)
+# plotting the outputs from GoTube (ellipse, circle, intersections etc.)
 
 import numpy as np
 import matplotlib.pyplot as plt
