@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import jax.numpy as jnp
 
@@ -25,7 +26,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--score", action="store_true")
-    parser.add_argument("--benchmark", default="vdp")
+    parser.add_argument("--benchmark", default="mlp")
     # starting_time, time_step and time_horizon for creating reachtubes
     parser.add_argument("--starting_time", default=0.0, type=float)
     parser.add_argument("--time_step", default=0.01, type=float)
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     log_args(vars(args))
 
     config = configparser.ConfigParser()
-    config.read("./config.ini")
+    config.read(os.path.dirname(__file__)+"/config.ini")
 
     files = config["files"]
 

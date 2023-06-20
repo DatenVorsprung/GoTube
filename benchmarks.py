@@ -1,10 +1,18 @@
 # different classes with benchmarks
 
+import os
 import jax.numpy as np
 from jax.numpy import tanh
 from jax.numpy import sin
 from jax.numpy import cos
 from jax.numpy import exp
+import pickle
+
+import jax.numpy as jnp
+import flax.linen as nn
+from flax.linen.initializers import constant, orthogonal
+from typing import Sequence
+import distrax
 
 
 def get_model(benchmark, radius=None):
@@ -34,6 +42,8 @@ def get_model(benchmark, radius=None):
         return PendulumwithCTRNN(radius)  # Benchmark to run
     elif benchmark == "CTRNNosc":
         return CTRNNosc(radius)  # Benchmark to run
+    elif benchmark == 'mlp':
+        return CartPoleMLP(radius)
     else:
         raise ValueError("Unknown benchmark " + benchmark)
 
@@ -1511,3 +1521,51 @@ class CTRNNosc:
         hidden = np.tanh(np.dot(x, self.params["w1"]) + self.params["b1"])
         dhdt = np.dot(hidden, self.params["w2"]) + self.params["b2"]
         return dhdt
+
+
+class CartPoleMLP:
+    def __init__(self, radius):
+        # ============ adapt initial values ===========
+        if radius is not None:
+            self.rad = radius
+        else:
+            self.rad = 0.1
+        self.cx = np.zeros(4)
+        self.dim = self.cx.size  # dimension of the system
+        # ===================================================
+
+        self.params = pickle.load(open(os.path.dirname(__file__) + "/rl/cartpole_mlp.pkl", "rb"))
+        # self.policy.config['explore'] = False  # make deterministic
+
+        # CARTPOLE config
+        self.gravity = 9.8
+        self.masscart = 1.0
+        self.masspole = 0.1
+        self.total_mass = (self.masspole + self.masscart)
+        self.length = 0.5  # actually half the pole's length
+        self.polemass_length = (self.masspole * self.length)
+        self.force_mag = 10.0
+        self.tau = 0.02  # seconds between state updates
+        self.elapsed_time = 0.0
+        self.kinematics_integrator = 'euler'
+
+    def fdyn(self, t=0, state=None):
+        if state is None:
+            state = np.zeros(self.dim, dtype=object)
+
+        # Forward pass of MLP with tanh activation
+        x = jnp.tanh(jnp.dot(state, self.params["w1"]) + self.params["b1"])
+        x = jnp.tanh(jnp.dot(x, self.params["w2"]) + self.params["b2"])
+        action = jnp.dot(x, self.params["w3"]) + self.params["b3"]
+        action = action[0]
+
+        x, x_dot, theta, theta_dot = state
+        force = self.force_mag * action
+        costheta = jnp.cos(theta)
+        sintheta = jnp.sin(theta)
+        temp = (force + self.polemass_length * theta_dot * theta_dot * sintheta) / self.total_mass
+        thetaacc = (self.gravity * sintheta - costheta * temp) / (self.length * (4.0 / 3.0 - self.masspole * costheta * costheta / self.total_mass))
+        xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
+        dxdt = jnp.stack((x_dot, xacc, theta_dot, thetaacc))
+
+        return dxdt
