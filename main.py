@@ -14,6 +14,9 @@ from performance_log import log_stat
 
 import argparse
 
+from jax import config
+config.update("jax_enable_x64", True)
+
 
 if __name__ == "__main__":
 
